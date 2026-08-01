@@ -3,6 +3,7 @@
 #include <LiquidCrystal_I2C.h>
 
 #include "timer.h"
+#include "audio.h"
 
 #define LCD_COLS 16
 #define LCD_ROWS 2
@@ -156,10 +157,13 @@ void setup() {
   resetTimer();
 
   Serial.println("Timer ready. Commands: start | stop | reset");
+
+  audioSetup();
 }
 
 void loop() {
   handleSerial();
   updateTimeDisplay();
   updateBlink();
+  audioLoop();
 }
