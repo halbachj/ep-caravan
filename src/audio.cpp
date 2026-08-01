@@ -7,7 +7,7 @@
 #include <AudioOutput.h>
 
 #define BT_SPEAKER_NAME "SPEAKER_NAME"
-#define AUDIO_FILE "/darren_hirst-knights-of-the-golden-order.mp3"
+#define AUDIO_FILE "/theme.mp3"
 #define BUFFER_SIZE 16384
 
 class A2DPAudioOutput : public AudioOutput {

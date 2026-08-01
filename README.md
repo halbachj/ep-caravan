@@ -175,6 +175,55 @@ defined but **not called** from `loop()` and the pins are not configured
 yet. To enable: call `pinMode(pin, INPUT_PULLUP)` for both pins in
 `setup()` and add `handleButtons();` to `loop()`.
 
+## Bluetooth audio (feature/bluetooth-audio)
+
+The firmware acts as a Bluetooth **A2DP source** and streams an MP3 from
+the on-board LittleFS filesystem to a connected BT speaker.
+
+### Flow
+
+1. `audioSetup()` mounts LittleFS and starts the A2DP source with a
+   friendly name (set via `BT_SPEAKER_NAME` in `src/audio.cpp`).
+2. `audioLoop()` decodes the MP3 (`AudioGeneratorMP3`) and pushes
+   samples into a ring buffer that the A2DP output drains.
+3. Playback only starts once a speaker has connected; on disconnect the
+   decoder is paused until the speaker returns.
+
+### Files
+
+| File | Purpose |
+| ---- | ------- |
+| `src/audio.cpp` / `src/audio.h` | A2DP + MP3 plumbing (`audioSetup`/`audioLoop`) |
+| `src/bt_compat.h` | Shim mapping `BT_MODE_*` → `ESP_BT_MODE_*` for the IDF 4.x SDK |
+| `data/` | Files uploaded to the LittleFS partition (MP3s) |
+| `static/` | Source-of-truth copies of the media assets |
+| `partitions.csv` | 2 MB `spiffs` partition (offset `0x1F0000`) where the FS lives |
+
+### Building the filesystem
+
+```sh
+pio run -t buildfs        # build .pio/build/esp32dev/littlefs.bin
+pio run -t uploadfs       # upload the filesystem to the board
+```
+
+> **Filenames must be ≤ 32 characters.** The bundled `mklittlefs` tool
+> builds the image with `LFS_NAME_MAX = 32` and silently fails to open
+> longer names (`unable to open '<file>.'`). The MP3s are therefore named
+> `theme.mp3` and `mission_impossible_theme.mp3` in `static/`/`data/`.
+> Only files under `data/` are included in the image.
+
+### Flash budget
+
+`mission_impossible_theme.mp3` is 3.3 MB and does **not** fit the 2 MB
+FS partition together with `theme.mp3` (513 KB), so it is currently
+excluded from `data/`. To play it, convert to a smaller/lower-bitrate
+file first (e.g. mono or ~128 kbps).
+
+### Speaker
+
+Set `BT_SPEAKER_NAME` in `src/audio.cpp` to the name shown on the phone
+when pairing.
+
 ## Board configuration
 
 `platformio.ini` pins the environment to the generic ESP32 DevKit:
