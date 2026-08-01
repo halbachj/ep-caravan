@@ -1,0 +1,10 @@
+# PlatformIO build output
+.pio/
+
+# Nix / direnv
+.direnv/
+result
+
+# Python
+__pycache__/
+*.pyc
