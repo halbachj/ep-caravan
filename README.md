@@ -100,6 +100,29 @@ It is an HD44780-compatible display with a soldered **PCF8574AT** I2C
 backpack, so any standard `LiquidCrystal_I2C` library works (no vendor
 library is required — JoyIT's own manual recommends the same one).
 
+## WS2812B LED strip (running pattern)
+
+A 300-LED WS2812B strip runs a comet pattern on **GPIO25**: a bright head
+with a fading tail travels from the first LED to the last, wrapping
+around. Each LED keeps a fixed hue (rainbow along the strip) so the
+moving head is easy to track.
+
+> **Do not use GPIO39.** The ESP32's GPIO 34–39 are input-only pins and
+> cannot drive WS2812B data. Use an output-capable pin like GPIO25.
+
+### Wiring
+
+| LED strip | ESP32 DevKit V1 |
+| --------- | --------------- |
+| `DATA` (DIN) | `GPIO25` |
+| `5V` | `VIN` (5V rail) |
+| `GND` | `GND` |
+
+> **Power.** At full white a 300-LED WS2812B strip draws up to ~18 A.
+> The firmware caps brightness at 64/255 (≈4.5 A), but for a real
+> (non-test) load power the strip from a dedicated 5 V supply with a
+> common GND — do not rely on the USB port's 5 V rail.
+
 ### Wiring
 
 | LCD | ESP32 DevKit V1 |

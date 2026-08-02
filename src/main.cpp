@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
+#include <Adafruit_NeoPixel.h>
 
 #include "timer.h"
 
@@ -14,8 +15,12 @@
 
 #define FINAL_BLINKS 3
 
+#define LED_PIN 25
+#define LED_COUNT 300
+
 LiquidCrystal_I2C* lcd = nullptr;
 Timer timer;
+Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 
 uint32_t lastRefresh = 0;
 uint32_t lastBlink = 0;
@@ -129,6 +134,20 @@ void handleButtons() {
   if (stopNow == LOW) stopTimer();
 }
 
+void updateLed() {
+  static uint32_t lastLed = 0;
+  if (millis() - lastLed < 30) return;
+  lastLed = millis();
+  uint16_t head = (millis() / 30) % LED_COUNT;
+  for (uint16_t i = 0; i < strip.numPixels(); i++) {
+    int dist = abs((int)head - (int)i);
+    uint8_t v = dist <= 6 ? (uint8_t)(255 - dist * 40) : 0;
+    uint16_t hue = i * 65536 / LED_COUNT;
+    strip.setPixelColor(i, strip.ColorHSV(hue, 255, v));
+  }
+  strip.show();
+}
+
 void updateTimeDisplay() {
   if (timer.state() == Timer::RUNNING && millis() - lastRefresh >= 50) {
     lastRefresh = millis();
@@ -164,6 +183,10 @@ void setup() {
   lcd->init();
   lcd->backlight();
 
+  strip.begin();
+  strip.setBrightness(64);
+  strip.show();
+
   resetTimer();
 
   Serial.println("Timer ready. Commands: start | stop | reset");
@@ -171,6 +194,7 @@ void setup() {
 
 void loop() {
   handleSerial();
+  updateLed();
   updateTimeDisplay();
   updateBlink();
 }
