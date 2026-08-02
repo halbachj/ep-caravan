@@ -12,11 +12,14 @@
 #define BTN_START_PIN 4
 #define BTN_STOP_PIN 2
 
+#define FINAL_BLINKS 3
+
 LiquidCrystal_I2C* lcd = nullptr;
 Timer timer;
 
 uint32_t lastRefresh = 0;
 uint32_t lastBlink = 0;
+uint8_t blinkCount = 0;
 bool displayOn = true;
 
 String serialBuf;
@@ -53,6 +56,7 @@ void showElapsed() {
 
 void showFinal() {
   lcd->display();
+  lcd->clear();
   lcd->setCursor(0, 0);
   lcd->print("Final Time:");
   writeTime(timer.elapsedMs());
@@ -71,6 +75,7 @@ void stopTimer() {
   if (timer.state() == Timer::RUNNING) {
     timer.stop();
     displayOn = true;
+    blinkCount = 0;
     lastBlink = millis();
     showFinal();
     Serial.println("timer stopped");
@@ -133,6 +138,7 @@ void updateTimeDisplay() {
 
 void updateBlink() {
   if (timer.state() != Timer::STOPPED) return;
+  if (blinkCount >= FINAL_BLINKS) return;
   if (millis() - lastBlink >= 500) {
     lastBlink = millis();
     displayOn = !displayOn;
@@ -140,6 +146,11 @@ void updateBlink() {
       lcd->display();
     } else {
       lcd->noDisplay();
+      blinkCount++;
+      if (blinkCount >= FINAL_BLINKS) {
+        displayOn = true;
+        lcd->display();
+      }
     }
   }
 }

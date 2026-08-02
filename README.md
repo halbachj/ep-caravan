@@ -150,7 +150,7 @@ The firmware implements a stopwatch timer shown on the LCD.
 | ----- | ----- | ----- | -------- |
 | Idle / reset | `Elapsed Time:` | `mm:ss:000` | static, zeroed |
 | Running | `Elapsed Time:` | `mm:ss:000` | value refreshes every 50 ms |
-| Stopped | `Final Time:` | `mm:ss:000` | both lines blink at 0.5 s |
+| Stopped | `Final Time:` | `mm:ss:000` | screen cleared, blinks 3x at 0.5 s, then solid |
 
 Time format is `mm:ss:mmm` (minutes : seconds : milliseconds, the `µµµ`
 of the requirement). `mm` can exceed 99 (3-digit minutes) so 30+ minute
