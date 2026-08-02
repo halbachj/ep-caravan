@@ -198,6 +198,83 @@ defined but **not called** from `loop()` and the pins are not configured
 yet. To enable: call `pinMode(pin, INPUT_PULLUP)` for both pins in
 `setup()` and add `handleButtons();` to `loop()`.
 
+## Bluetooth audio (feature/bluetooth-audio)
+
+The firmware acts as a Bluetooth **A2DP source** and streams an MP3 from
+the on-board LittleFS filesystem to a connected BT speaker.
+
+### Flow
+
+1. `audioSetup()` mounts LittleFS and starts the A2DP source with a
+   friendly name (set via `BT_SPEAKER_NAME` in `src/audio.cpp`).
+2. `audioLoop()` decodes the file — MP3 via `AudioGeneratorMP3` or WAV
+   via `AudioGeneratorWAV`, selected by extension — and pushes samples
+   into a ring buffer that the A2DP output drains.
+3. Playback only starts once a speaker has connected; on disconnect the
+   decoder is paused until the speaker returns.
+
+### Files
+
+| File | Purpose |
+| ---- | ------- |
+| `src/audio.cpp` / `src/audio.h` | A2DP + MP3/WAV plumbing (`audioSetup`/`audioLoop`) |
+| `src/bt_compat.h` | Shim mapping `BT_MODE_*` → `ESP_BT_MODE_*` for the IDF 4.x SDK |
+| `data/` | Files uploaded to the LittleFS partition (MP3/WAV) |
+| `static/` | Source-of-truth copies of the media assets |
+| `partitions.csv` | 2 MB `spiffs` partition (offset `0x1F0000`) where the FS lives |
+
+### Building the filesystem
+
+```sh
+pio run -t buildfs        # build .pio/build/esp32dev/littlefs.bin
+pio run -t uploadfs       # upload the filesystem to the board
+```
+
+> **Filenames must be ≤ 32 characters.** The bundled `mklittlefs` tool
+> builds the image with `LFS_NAME_MAX = 32` and silently fails to open
+> longer names (`unable to open '<file>.'`). Only files under `data/` are
+> included in the image.
+
+### Flash budget
+
+The 2 MB FS partition currently holds two audio files:
+
+| File | Size | Notes |
+| ---- | ---- | ----- |
+| `mission_impossible_theme.mp3` | 2.0 MB | 125 s, 44.1 kHz MP3 (cut from the 3:27 original, converted from 48 kHz) |
+| `alarm.wav` | 74 KB | 0.42 s stereo WAV, seamless loop of the alarm's 6.5 Hz tremolo |
+
+The full-length sources (`mission_impossible_theme_full.mp3` 3.3 MB,
+`alarm.mp3` 17.6 MB) are kept locally, not in the repo — neither fits
+the 2 MB partition as-is.
+
+### Choosing a track
+
+`play <file>` selects a track from the filesystem (e.g. `play
+mission_impossible_theme.mp3` or `play alarm.wav`); playback switches on
+the next loop pass. The generator is picked by extension (`.mp3` /
+`.wav`). A WAV reaches its end loops back to the start every ~0.3 s for a
+continuous alarm tone.
+
+### The alarm loop unit
+
+`alarm.wav` is the shortest loopable unit of the source alarm
+(`static/alarm.mp3`), which is a steady ~1.36 kHz tone amplitude-modulated
+at ~6.5 Hz (one tremolo cycle ≈ 0.153 s). The carrier phase drifts
+randomly (FM warble), so no fixed loop length can phase-match the seam;
+instead the unit is cut at a naturally quiet point in the tremolo
+(t≈42 s, seam envelope ≈ 0.07 vs a mid-loop ≈ 0.26) and both ends are
+faded through zero with 3 ms raised-cosine ramps. The seam is a 0.42 s
+loop that passes through silence at a point the alarm already dips to on
+its own, so the restart is masked by the tremolo. WAV is used rather than
+MP3 so the firmware's replay-based loop has no MP3 encoder-delay artifact
+at the seam.
+
+### Speaker
+
+Set `BT_SPEAKER_NAME` in `src/audio.cpp` to the name shown on the phone
+when pairing.
+
 ## Board configuration
 
 `platformio.ini` pins the environment to the generic ESP32 DevKit:

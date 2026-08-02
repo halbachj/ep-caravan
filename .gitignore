@@ -8,3 +8,6 @@ result
 # Python
 __pycache__/
 *.pyc
+
+# Octave workspace dumps
+octave-workspace

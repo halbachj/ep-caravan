@@ -4,6 +4,7 @@
 #include <Adafruit_NeoPixel.h>
 
 #include "timer.h"
+#include "audio.h"
 
 #define LCD_COLS 16
 #define LCD_ROWS 2
@@ -94,6 +95,12 @@ void resetTimer() {
   Serial.println("timer reset");
 }
 
+void printHelp() {
+  Serial.println("Timer:  start | stop | reset");
+  Serial.println("BT:     list | status | connect <mac> | disconnect | auto <on|off>");
+  Serial.println("Audio:  play <file>   (files: mission_impossible_theme.mp3, alarm.wav)");
+}
+
 void handleSerial() {
   while (Serial.available()) {
     char c = Serial.read();
@@ -105,8 +112,26 @@ void handleSerial() {
         stopTimer();
       } else if (serialBuf == "reset") {
         resetTimer();
+      } else if (serialBuf == "help") {
+        printHelp();
+      } else if (serialBuf == "list") {
+        audioListDevices();
+      } else if (serialBuf == "status") {
+        audioStatus();
+      } else if (serialBuf == "disconnect") {
+        audioDisconnect();
+      } else if (serialBuf == "scan") {
+        Serial.println("Scanning runs continuously in the background; type 'list' to see results.");
+      } else if (serialBuf.startsWith("connect ")) {
+        audioConnectTo(serialBuf.substring(8).c_str());
+      } else if (serialBuf == "auto on") {
+        audioSetAutoReconnect(true);
+      } else if (serialBuf == "auto off") {
+        audioSetAutoReconnect(false);
+      } else if (serialBuf.startsWith("play ")) {
+        audioPlay(serialBuf.substring(5).c_str());
       } else {
-        Serial.printf("unknown command: '%s' (expected: start | stop | reset)\n", serialBuf.c_str());
+        Serial.printf("unknown command: '%s' (type 'help')\n", serialBuf.c_str());
       }
       serialBuf = "";
     } else if (c != '\r') {
@@ -189,7 +214,9 @@ void setup() {
 
   resetTimer();
 
-  Serial.println("Timer ready. Commands: start | stop | reset");
+  Serial.println("Ready. Commands: start | stop | reset | help");
+
+  audioSetup();
 }
 
 void loop() {
@@ -197,4 +224,5 @@ void loop() {
   updateLed();
   updateTimeDisplay();
   updateBlink();
+  audioLoop();
 }
