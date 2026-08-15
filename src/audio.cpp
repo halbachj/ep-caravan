@@ -6,6 +6,7 @@
 #include <AudioGeneratorMP3.h>
 #include <AudioGeneratorWAV.h>
 #include <AudioOutput.h>
+#include <Preferences.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -24,7 +25,8 @@ typedef struct {
 
 static bt_device_t devices[MAX_DEVICES];
 static uint8_t deviceCount = 0;
-static bool autoconnect = false;
+static bool autoconnect = true;
+static Preferences preferences;
 
 class A2DPAudioOutput : public AudioOutput {
 public:
@@ -66,6 +68,15 @@ public:
     return copied;
   }
 
+  void clear() {
+    if (xSemaphoreTake(mutex_, portMAX_DELAY)) {
+      readIdx_ = 0;
+      writeIdx_ = 0;
+      count_ = 0;
+      xSemaphoreGive(mutex_);
+    }
+  }
+
 private:
   void writeSample(int16_t s) {
     buffer_[writeIdx_] = s & 0xFF;
@@ -89,6 +100,8 @@ static AudioGenerator* gen = nullptr;
 static A2DPAudioOutput* out = nullptr;
 
 static String currentFile = AUDIO_FILE;
+static bool playbackEnabled = false;
+static bool loopPlayback = true;
 
 static AudioGenerator* selectGenerator(const char* path) {
   if (strstr(path, ".wav") != nullptr || strstr(path, ".WAV") != nullptr) {
@@ -149,6 +162,11 @@ static bool parseMac(const char* mac, uint8_t bda[6]) {
   return true;
 }
 
+static bool loadSavedSpeaker(uint8_t bda[6]) {
+  return preferences.getBytesLength("speaker") == ESP_BD_ADDR_LEN &&
+         preferences.getBytes("speaker", bda, ESP_BD_ADDR_LEN) == ESP_BD_ADDR_LEN;
+}
+
 void audioSetup() {
   if (!LittleFS.begin(true)) {
     Serial.println("audio: LittleFS mount failed");
@@ -164,7 +182,17 @@ void audioSetup() {
   a2dp_source.set_data_callback(getSoundData);
   a2dp_source.set_local_name(BT_SPEAKER_NAME);
   a2dp_source.set_ssid_callback(scanCallback);
-  a2dp_source.set_auto_reconnect(false);
+  preferences.begin("ep-caravan", false);
+  uint8_t savedSpeaker[ESP_BD_ADDR_LEN];
+  if (loadSavedSpeaker(savedSpeaker)) {
+    a2dp_source.set_auto_reconnect(savedSpeaker);
+    Serial.printf("audio: reconnecting to saved speaker %02X:%02X:%02X:%02X:%02X:%02X\n",
+                  savedSpeaker[0], savedSpeaker[1], savedSpeaker[2], savedSpeaker[3],
+                  savedSpeaker[4], savedSpeaker[5]);
+  } else {
+    a2dp_source.set_auto_reconnect(true);
+    Serial.println("audio: no saved speaker; connect once with 'connect <mac>'.");
+  }
   a2dp_source.start();
 
   Serial.printf("audio: scanning for speakers, will play '%s' once connected.\n", AUDIO_FILE);
@@ -173,6 +201,9 @@ void audioSetup() {
 
 void audioLoop() {
   if (mp3 == nullptr || out == nullptr) {
+    return;
+  }
+  if (!playbackEnabled) {
     return;
   }
   if (!a2dp_source.is_connected()) {
@@ -189,13 +220,21 @@ void audioLoop() {
     } else {
       Serial.printf("audio: playback start failed (file %s, exists %d, free heap %u)\n",
                     file->isOpen() ? "open" : "closed",
-                    LittleFS.exists(AUDIO_FILE),
+                    LittleFS.exists(currentFile.c_str()),
                     ESP.getFreeHeap());
     }
     return;
   }
   if (!gen->loop()) {
     gen->stop();
+    if (!loopPlayback) {
+      playbackEnabled = false;
+      if (file->isOpen()) {
+        file->close();
+      }
+      Serial.println("audio: playback finished");
+      return;
+    }
     static uint32_t lastRestartLog = 0;
     if (millis() - lastRestartLog > 5000) {
       lastRestartLog = millis();
@@ -234,6 +273,9 @@ bool audioConnectTo(const char* mac) {
     Serial.printf("Invalid MAC '%s' (use format AA:BB:CC:DD:EE:FF)\n", mac);
     return false;
   }
+  preferences.putBytes("speaker", bda, ESP_BD_ADDR_LEN);
+  a2dp_source.set_auto_reconnect(bda);
+  autoconnect = true;
   if (a2dp_source.is_connected()) {
     a2dp_source.disconnect();
     delay(200);
@@ -256,12 +298,18 @@ void audioSetAutoReconnect(bool enable) {
   Serial.printf("audio: auto-reconnect %s\n", enable ? "on" : "off");
 }
 
-bool audioPlay(const char* name) {
-  currentFile = "/";
-  currentFile += name;
+static bool audioPlayInternal(const char* name, bool loop) {
   if (gen != nullptr && gen->isRunning()) {
     gen->stop();
   }
+  if (out != nullptr) {
+    out->clear();
+  }
+  if (file != nullptr && file->isOpen()) {
+    file->close();
+  }
+  currentFile = "/";
+  currentFile += name;
   if (!LittleFS.exists(currentFile.c_str())) {
     Serial.printf("audio: '%s' not on filesystem. Available files:\n", currentFile.c_str());
     File dir = LittleFS.open("/");
@@ -274,7 +322,30 @@ bool audioPlay(const char* name) {
     return false;
   }
   gen = selectGenerator(currentFile.c_str());
-  file->open(currentFile.c_str());
+  playbackEnabled = true;
+  loopPlayback = loop;
   Serial.printf("audio: will play '%s'\n", currentFile.c_str());
   return true;
+}
+
+bool audioPlay(const char* name) {
+  return audioPlayInternal(name, true);
+}
+
+bool audioPlayOnce(const char* name) {
+  return audioPlayInternal(name, false);
+}
+
+void audioStop() {
+  playbackEnabled = false;
+  if (gen != nullptr && gen->isRunning()) {
+    gen->stop();
+  }
+  if (file != nullptr && file->isOpen()) {
+    file->close();
+  }
+  if (out != nullptr) {
+    out->clear();
+  }
+  Serial.println("audio: playback stopped");
 }

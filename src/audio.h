@@ -10,3 +10,5 @@ bool audioConnectTo(const char* mac);
 void audioDisconnect();
 void audioSetAutoReconnect(bool enable);
 bool audioPlay(const char* file);
+bool audioPlayOnce(const char* file);
+void audioStop();
