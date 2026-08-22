@@ -56,8 +56,8 @@ VICTORY_BLINKING --> VICTORY_SIREN --> VICTORY_FLASHING --> VICTORY_LATCHED
 - The finish switch is examined only in `RUNNING`. A finish event always wins
   over later laser input because the state leaves `RUNNING` immediately.
 - GPIO4 has two roles: it starts from `READY`; otherwise it resets to `READY`.
-- Reset is rejected while GPIO5 is LOW. This applies to GPIO4 and the serial
-  `reset` command. Boot uses a forced reset to establish the initial state.
+- GPIO4 reset is allowed regardless of GPIO5. Boot uses the same reset path to
+  establish the initial state.
 - Serial `stop` only acts from `RUNNING` and returns directly to `READY`.
 
 ## Timing constants

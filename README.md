@@ -78,7 +78,7 @@ inputs HIGH when open. Inputs are debounced for 50 ms.
 - GPIO4 starts a game from `READY`.
 - GPIO4 resets every non-ready state.
 - GPIO5 finishes a running game. It is a toggle switch; reset is blocked while
-  it remains pressed/LOW, including the serial `reset` command.
+  it remains pressed/LOW, but it does not block GPIO4 reset.
 
 ### LED strip
 
